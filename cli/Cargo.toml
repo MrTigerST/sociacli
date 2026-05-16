@@ -1,0 +1,87 @@
+[package]
+name = "sociacli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Mini peer-to-peer social CLI: friends, messages, game invites, push-to-talk."
+repository = "https://github.com/MrTigerST/sociacli"
+readme = "../README.md"
+
+[[bin]]
+name = "sociacli"
+path = "src/main.rs"
+
+# Tiny GUI-subsystem launcher used by the Windows autostart entry. Compiled as
+# a normal .exe (not a script) so antivirus heuristics don't flag the boot
+# autostart, and as a GUI subsystem binary so Windows allocates no console for
+# it — the daemon it spawns comes up completely invisibly.
+[[bin]]
+name = "sociacli-launch"
+path = "src/launch.rs"
+
+[package.metadata.deb]
+maintainer = "sociacli authors"
+copyright = "2026, sociacli authors"
+license-file = ["../LICENSE", "0"]
+section = "net"
+priority = "optional"
+depends = "$auto, libasound2, libopus0"
+extended-description = """
+Peer-to-peer social CLI built on top of a Bun signaling server.
+Adds friends with per-action permissions, in-line messages, game-invite
+links, and Opus push-to-talk over WebRTC. Bottom-right notifications are
+rendered by an optional companion Tauri overlay."""
+assets = [
+    ["target/release/sociacli", "usr/bin/", "755"],
+    ["../README.md", "usr/share/doc/sociacli/README.md", "644"],
+    ["../LICENSE", "usr/share/doc/sociacli/LICENSE", "644"],
+]
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+
+clap = { version = "4.5", features = ["derive", "env"] }
+directories = "5"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "handshake", "rustls-tls-native-roots"] }
+futures-util = "0.3"
+url = "2"
+rpassword = "7"
+bytes = "1"
+async-trait = "0.1"
+rustyline = "14"
+shlex = "1"
+
+# Auto-update from GitHub Releases.
+self_update = { version = "0.41", default-features = false, features = [
+    "archive-tar",
+    "archive-zip",
+    "compression-flate2",
+    "compression-zip-deflate",
+    "rustls",
+] }
+
+# Lua plugin SDK
+mlua = { version = "0.10", features = ["lua54", "vendored", "send"] }
+toml = "0.8"
+sha2 = "0.10"
+base64 = "0.22"
+hex = "0.4"
+
+# P2P
+webrtc = "0.11"
+
+# PTT
+rodio = { version = "0.19", default-features = false, features = ["wav", "vorbis"] }
+audiopus = "0.2"
+global-hotkey = "0.5"
+crossbeam-channel = "0.5"
+cpal = "0.15"
+crossterm = "0.27"

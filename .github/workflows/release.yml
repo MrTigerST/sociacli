@@ -1,0 +1,259 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (else 0.0.0-dev+sha)'
+        required: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            kind: inno
+          - label: linux-x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            kind: deb
+          - label: macos-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            kind: dmg
+          # Intel slice dropped: macos-13 runner retired and modern Intel Macs
+          # run the arm64 build under Rosetta 2.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            v="${GITHUB_REF#refs/tags/v}"
+            channel="release"
+          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+            v="${{ github.event.inputs.version }}"
+            channel="release"
+          elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            # Rolling "auto" build for every push to main. Not semver, so
+            # `sociacli update` skips it — only tagged releases self-update.
+            v="0.0.0-auto+${GITHUB_SHA:0:7}"
+            channel="auto"
+          else
+            v="0.0.0-dev+${GITHUB_SHA:0:7}"
+            channel="dev"
+          fi
+          echo "version=$v"   >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "sociacli version: $v ($channel)"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # ---------- per-OS build deps ----------
+      - name: Linux build deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libopus-dev libssl-dev pkg-config cmake build-essential
+
+      # macOS: clang + cmake ship with the image, but audiopus_sys needs
+      # either pkg-config-discoverable libopus *or* autoconf/automake/libtool
+      # to build its vendored copy. Install libopus + pkg-config so the
+      # crate links the system library and skips the autotools dance.
+      - name: macOS build deps
+        if: runner.os == 'macOS'
+        run: brew install opus pkg-config
+
+      # Windows runner ships MSVC + CMake.
+
+      - name: Linux overlay build deps (webkit2gtk)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+            libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Build sociacli (CLI)
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: cargo build --release --target ${{ matrix.target }} -p sociacli
+
+      - name: Build sociacli-overlay (Tauri window)
+        run: cargo build --release --target ${{ matrix.target }} -p sociacli-overlay
+
+      # ---------- Raw binary archive (consumed by `sociacli update`) ----------
+      - name: Stage raw binary (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p staging
+          cp "target/${{ matrix.target }}/release/sociacli" staging/
+          tar -czf "sociacli-${{ matrix.target }}.tar.gz" -C staging sociacli
+          ls -la sociacli-*.tar.gz
+
+      - name: Stage raw binary (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory staging -Force | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/sociacli.exe" staging/
+          Compress-Archive -Path staging/sociacli.exe -DestinationPath "sociacli-${{ matrix.target }}.zip" -Force
+          Get-ChildItem sociacli-*.zip
+
+      - name: Upload raw binary archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: sociacli-raw-${{ matrix.label }}-${{ steps.ver.outputs.version }}
+          path: |
+            sociacli-${{ matrix.target }}.tar.gz
+            sociacli-${{ matrix.target }}.zip
+          if-no-files-found: ignore
+
+      # ---------- Windows: Inno Setup .exe ----------
+      - name: Inno Setup
+        if: matrix.kind == 'inno'
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.5
+        with:
+          path: installer/windows/sociacli.iss
+          options: >-
+            /DAppVersion=${{ steps.ver.outputs.version }}
+            /DBinDir=..\..\target\${{ matrix.target }}\release
+
+      - name: Upload Windows installer
+        if: matrix.kind == 'inno'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sociacli-${{ matrix.label }}-${{ steps.ver.outputs.version }}
+          path: installer/windows/Output/*.exe
+          if-no-files-found: error
+
+      # ---------- macOS: .dmg ----------
+      - name: Build macOS .dmg
+        if: matrix.kind == 'dmg'
+        run: |
+          chmod +x installer/macos/build-dmg.sh
+          installer/macos/build-dmg.sh ${{ matrix.target }} ${{ steps.ver.outputs.version }}
+
+      - name: Upload macOS dmg
+        if: matrix.kind == 'dmg'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sociacli-${{ matrix.label }}-${{ steps.ver.outputs.version }}
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      # ---------- Linux: .deb via cargo-deb ----------
+      - name: Install cargo-deb
+        if: matrix.kind == 'deb'
+        run: cargo install cargo-deb --locked
+
+      - name: Build .deb
+        if: matrix.kind == 'deb'
+        run: cargo deb -p sociacli --target ${{ matrix.target }} --no-build
+
+      - name: Upload Linux deb
+        if: matrix.kind == 'deb'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sociacli-${{ matrix.label }}-${{ steps.ver.outputs.version }}
+          path: target/${{ matrix.target }}/debian/*.deb
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p out
+          find dist -type f \
+            \( -name '*.exe' -o -name '*.dmg' -o -name '*.deb' \
+               -o -name '*.tar.gz' -o -name '*.zip' \) \
+            -exec mv {} out/ \;
+          ls -la out
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+  # Rolling "auto" pre-release: rewritten on every push to main.
+  # NOT consumed by `sociacli update` (the version is not semver), so it's
+  # safe to ship from green main pushes.
+  auto-release:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p out
+          find dist -type f \
+            \( -name '*.exe' -o -name '*.dmg' -o -name '*.deb' \
+               -o -name '*.tar.gz' -o -name '*.zip' \) \
+            -exec mv {} out/ \;
+          ls -la out
+
+      - name: Delete previous `auto` release + tag (if any)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete auto --yes --cleanup-tag || true
+
+      - name: Move the `auto` tag to this commit
+        run: |
+          git tag -f auto "$GITHUB_SHA"
+          git push -f origin "refs/tags/auto"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: auto
+          name: "auto (rolling main build)"
+          body: |
+            Rolling pre-release rebuilt from every push to `main`.
+            **Not** picked up by `sociacli update` — only `v*.*.*` tags are.
+            Commit: `${{ github.sha }}`
+          files: out/*
+          draft: false
+          prerelease: true
+          make_latest: false

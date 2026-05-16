@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = ["cli", "overlay/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# Cold-start tuned release profile — the Windows `.lnk` HotKey, the global
+# `open` hotkey, and the REPL all pay this once. `thin` LTO (not `fat`) is
+# the sweet spot: ~95 % of the size + speed win without blowing the rustc
+# linker memory budget on the Tauri overlay's dep graph (Windows MSVC
+# previously OOM-killed lld with `fat`).
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[workspace.dependencies]
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }

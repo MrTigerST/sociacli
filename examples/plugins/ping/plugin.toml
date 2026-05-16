@@ -1,0 +1,7 @@
+id          = "ping"
+name        = "Ping"
+version     = "0.1.0"
+author      = "sociacli"
+description = "Demo plugin: prints a ping locally, or echoes a message from a friend."
+entry       = "main.lua"
+capabilities = ["send", "receive", "notify"]

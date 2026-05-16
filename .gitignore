@@ -1,0 +1,18 @@
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+
+# Bun / Node
+node_modules/
+bun.lockb
+.env
+.env.local
+
+# Tauri
+overlay/src-tauri/target/
+overlay/dist/
+
+# OS
+.DS_Store
+Thumbs.db

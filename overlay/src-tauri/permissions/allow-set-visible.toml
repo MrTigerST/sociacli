@@ -1,0 +1,6 @@
+"$schema" = "schemas/schema.json"
+
+[[permission]]
+identifier = "allow-set-visible"
+description = "Allow the overlay UI to show / hide its own window."
+commands.allow = ["set_visible"]

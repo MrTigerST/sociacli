@@ -1,0 +1,155 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+body.flash {
+  box-shadow: inset 0 0 0 2px rgba(120, 200, 255, 0.55);
+  transition: box-shadow 120ms ease-out;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Daemon starts the overlay invisible at the OS level — these classes are a
+   belt-and-braces fallback so even a brief flicker doesn't show empty UI. */
+html.hidden body { visibility: hidden; pointer-events: none; }
+
+#topbar {
+  position: fixed;
+  top: 6px;
+  right: 8px;
+  z-index: 10;
+}
+#clear-all {
+  background: rgba(40, 44, 56, 0.95);
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+#clear-all:hover { background: rgba(60, 66, 84, 0.95); color: #fff; }
+
+#stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 36px 8px 8px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.18) transparent;
+}
+#stack::-webkit-scrollbar { width: 6px; }
+#stack::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
+
+.card {
+  /* Solid background — no transparency on the notification body itself. */
+  background: #181a22;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #eee;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  animation: slide-in 180ms ease-out;
+  cursor: default;
+}
+.card.fade { animation: fade-out 220ms ease-in forwards; }
+
+.card .row { display: flex; align-items: center; gap: 8px; }
+.card .close {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  color: #9ca3af;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.card .close:hover { color: #f87171; }
+.card .from { font-size: 12px; color: #9ca3af; }
+.card .kind {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #d1d5db;
+}
+.card.action-message .kind     { background: rgba(96, 165, 250, 0.20); color: #93c5fd; }
+.card.action-game_invite .kind { background: rgba(168, 85, 247, 0.22); color: #d8b4fe; }
+.card.action-ptt .kind         { background: rgba(244, 114, 182, 0.20); color: #f9a8d4; }
+.card.action-plugin .kind      { background: rgba(34, 197, 94, 0.20);  color: #86efac; }
+.card.action-update .kind      { background: rgba(245, 158, 11, 0.22); color: #fcd34d; }
+.card.action-friend_request .kind { background: rgba(56, 189, 248, 0.20); color: #7dd3fc; }
+
+.card .title { font-size: 14px; font-weight: 600; margin: 6px 0 2px; }
+.card .body  { font-size: 12.5px; color: #d1d5db; line-height: 1.4; word-break: break-word; }
+.card a { color: #93c5fd; text-decoration: none; }
+.card a:hover { text-decoration: underline; }
+
+/* Game invite — make it pop. */
+.card.action-game_invite {
+  background: linear-gradient(140deg, #2a1d3f 0%, #181a22 70%);
+  border-color: rgba(168, 85, 247, 0.45);
+  box-shadow: 0 10px 30px rgba(124, 58, 237, 0.30), 0 0 0 1px rgba(168, 85, 247, 0.18) inset;
+}
+.card.action-game_invite .title { color: #f5d0fe; }
+
+/* Update prompt — amber, important. */
+.card.action-update {
+  background: linear-gradient(140deg, #3a2c12 0%, #181a22 70%);
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 10px 30px rgba(217, 119, 6, 0.28), 0 0 0 1px rgba(245, 158, 11, 0.18) inset;
+}
+.card.action-update .title { color: #fde68a; }
+
+/* Action buttons (game invite + custom message buttons). */
+.card .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn:hover { background: rgba(255, 255, 255, 0.12); }
+.btn-accept {
+  background: rgba(34, 197, 94, 0.20);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #bbf7d0;
+}
+.btn-accept:hover { background: rgba(34, 197, 94, 0.32); }
+.btn-decline {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.40);
+  color: #fecaca;
+}
+.btn-decline:hover { background: rgba(248, 113, 113, 0.30); }
+
+@keyframes slide-in {
+  from { transform: translateX(40%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes fade-out {
+  to { transform: translateX(40%); opacity: 0; }
+}
